@@ -18,11 +18,21 @@
 #define BUFFER_SIZE 10 // Max number read
 #define TLB_SIZE 16
 #define MEMORY_SIZE (FRAMES * PAGE_SIZE)
+
+//define TLB
+struct TLBenrty {
+    int page, frame;
+};
+
+struct TLBenrty TLB[TLB_SIZE];
+
 // simulation for a circular array.
 int frame_counter = -1;
+int tlb_counter = -1;
 //counters
 int page_fault_counter = 0;
 int address_counter = 0;
+int tlb_hit_counter = 0;
 // initialize page table
 int page_table[PAGES];
 //backing store pointer
@@ -30,6 +40,34 @@ char *mmapfptr ;
 //native byte representation of memory
 char memory[MEMORY_SIZE];
 
+//TLB functions
+int search_tlb(int pg_number){
+    for (int i = 0; i < TLB_SIZE; i++) {
+        if (TLB[i].page == pg_number){
+            ++ tlb_hit_counter;
+            return TLB[i].frame;
+        }
+    }
+    return -2;// -2 for not hit and -1 for page fault
+}
+
+void add_tlb(int pg_number, int frame_number){
+    ++ tlb_counter;
+    int tlb_index = tlb_counter % TLB_SIZE;
+    TLB[tlb_index].frame = frame_number;
+    TLB[tlb_index].page = pg_number;
+}
+
+void update_tlb(int pg_number, int frame_number){
+    for (int i = 0; i < TLB_SIZE; i++){
+        //search for the TLB with pg_number
+        if (TLB[i].page == pg_number){
+            TLB[i].frame = frame_number;
+        }
+    }
+}
+
+//search for avaliable frame with FIFO policy
 int select_frame(){
     ++ page_fault_counter;
     ++ frame_counter;
@@ -43,6 +81,7 @@ int select_frame(){
         // printf("frame index: %d ", frame_index);
         for (int i = 0; i < PAGES; i++){
             if (page_table[i] == frame_index){
+                update_tlb(i, -1);
                 page_table[i] = -1;//invalidate it
                 break;
             }
@@ -54,6 +93,7 @@ int select_frame(){
 
 void page_fault_handler(int pg_number){
     int frame = page_table[pg_number];
+    //copy memory from mmap file to memory array.
     memcpy(memory + frame * PAGE_SIZE, mmapfptr + pg_number * PAGE_SIZE, PAGE_SIZE);
 }
 
@@ -75,14 +115,19 @@ int main(int argc, const char *argv[])
         page_table[i] = -1;
     }
     // init variables
-    int value;
+    char value;
     int virtual_address;
     int page_number;
     int offset;
     int physical_address;
     int frame_number;
+    int tlb_result;
     // initialize TLB
-
+    for (int i = 0; i < TLB_SIZE; i++){
+        TLB[i].frame = -1;
+        TLB[i].page = -1;
+    }
+    
     while (fgets(buff, BUFFER_SIZE, fptr) != NULL)
     {
         ++ address_counter;
@@ -93,13 +138,23 @@ int main(int argc, const char *argv[])
         page_number = virtual_address >> OFFSET_BITS;
         // page_number = GET_PAGE_NUMBER(virtual_address);
         offset = virtual_address & OFFSET_MASK;
-
-        // search in page table
-        if (page_table[page_number] == -1){
+        //search in tlb
+        tlb_result = search_tlb(page_number);
+        if (tlb_result == -1){//tlb hit but page fault
             page_table[page_number] = select_frame();
             page_fault_handler(page_number);
+            frame_number = page_table[page_number];
+            add_tlb(page_number, frame_number);
+        } else if (tlb_result == -2){// tlb not hit
+            if (page_table[page_number] == -1){//page fault
+                page_table[page_number] = select_frame();
+                page_fault_handler(page_number);
+            }
+            frame_number = page_table[page_number];
+            add_tlb(page_number, frame_number);
+        }else{// tlb hit and page valid
+            frame_number = tlb_result;
         }
-        frame_number = page_table[page_number];
         
 
         // calculate physical address
@@ -123,6 +178,6 @@ int main(int argc, const char *argv[])
     // printf("}\n");
     printf("total addresses = %d \n", address_counter);
     printf("Page_faults = %d \n", page_fault_counter);
-
+    printf("TLB Hits = %d \n", tlb_hit_counter);
     return 0;
 }
