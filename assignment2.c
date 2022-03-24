@@ -112,7 +112,7 @@ int main(int argc, const char *argv[])
     }
     //close all file and unmap file
     close(mmapfile_fd);
-    munmap(mmapfptr, MEMORY_SIZE);
+    munmap(mmapfptr, PAGES * PAGE_SIZE);
     fclose(fptr);
 
     // printf("page table = {");
