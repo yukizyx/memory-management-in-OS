@@ -3,138 +3,123 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
+#include <sys/mman.h> 
+#include <unistd.h>
+#include <fcntl.h>
 
 // page size = 256 byte = 2 ** 8
 // logical space = 16 bits, physical space = 15 bits
 // page number bits = offset bits = 8 bits
-
-// address calculation
 #define OFFSET_MASK 255
+#define PAGES 256 // logical memory space / page size
 #define OFFSET_BITS 8
-
-// total = 256 pages, 128 frames
-#define PAGE_NUM 256 // logical memory space / page size
-#define FRAME_NUM 128
-
 #define PAGE_SIZE 256
-#define FRAME_SIZE 256
-#define BUFFER_SIZE 10 // ??
+#define FRAMES 128 // physical memory space / page size
+#define BUFFER_SIZE 10 // Max number read
 #define TLB_SIZE 16
-#define MEMORY_SIZE 32768
+#define MEMORY_SIZE (FRAMES * PAGE_SIZE)
+// simulation for a circular array.
+int frame_counter = -1;
+//counters
+int page_fault_counter = 0;
+int address_counter = 0;
+// initialize page table
+int page_table[PAGES];
+//backing store pointer
+char *mmapfptr ;
+//native byte representation of memory
+unsigned char *memory[MEMORY_SIZE];
 
-int i;
-int page_faults = 0;
-int current_frame = 0;
-int page_table[PAGE_NUM];
-int page_in_memo[PAGE_NUM];
-
-int select_frame()
-{
-    int selected;
-    if (current_frame < FRAME_NUM)
-    {
-        selected = current_frame;
-        current_frame++;
-        return selected;
-    }
-    else
-    {
-        selected = (current_frame) % FRAME_NUM;
-        for (i = 0; i < PAGE_NUM; ++i)
-        {
-            if (page_table[i] == selected && page_in_memo[i] == 1)
-            {
-                page_in_memo[i] = 0; // invalidate it
+int select_frame(){
+    ++ page_fault_counter;
+    ++ frame_counter;
+    // printf("frame count: %d ", frame_counter);
+    if(frame_counter < FRAMES){
+        // printf("\n");
+        return frame_counter;
+    }else{
+        //find the original page the linked to the frame
+        int frame_index = frame_counter % FRAMES;
+        // printf("frame index: %d ", frame_index);
+        for (int i = 0; i < PAGES; i++){
+            if (page_table[i] == frame_index){
+                page_table[i] = -1;//invalidate it
                 break;
             }
         }
-        current_frame++;
-        return selected;
+        // printf("\n");
+        return frame_index;
     }
+}
+
+void page_fault_handler(int pg_number){
+    int frame = page_table[pg_number];
+    memcpy(memory + frame * PAGE_SIZE, mmapfptr + pg_number * PAGE_SIZE, PAGE_SIZE * sizeof(unsigned char));
 }
 
 int main(int argc, const char *argv[])
 {
-    // open the file
+    // open the address
     FILE *fptr = fopen("addresses.txt", "r");
-    FILE *storage = fopen("BACKING_STORE.bin", "rb");
+    //open backing store
+    int mmapfile_fd = open("BACKING_STORE.bin", O_RDONLY);
+    //backing pointer
+    mmapfptr = mmap(0, MEMORY_SIZE, PROT_READ, MAP_PRIVATE, mmapfile_fd, 0);
 
     // create buffer to load each virtual address
     char buff[BUFFER_SIZE];
-    char main_memory[MEMORY_SIZE];
 
-    int virtual_address;
-    int page_number;
-    int offset;
-
-    int physical_address;
-    int frame_number;
-
-    // initialize page table
-
-    for (i = 0; i < PAGE_NUM; i++)
+    //init page table
+    for (int i = 0; i < PAGES; i++)
     {
         page_table[i] = -1;
-    }
-
-    // initialize pages in main memory
-
-    for (i = 0; i < PAGE_NUM; i++)
-    {
-        page_in_memo[i] = 0;
     }
 
     // initialize TLB
 
     while (fgets(buff, BUFFER_SIZE, fptr) != NULL)
     {
+        ++ address_counter;
+        int virtual_address;
+        int page_number;
+        int offset;
+        int physical_address;
+        int frame_number;
+
         // calculate virtual address, page number and offset
         virtual_address = atoi(buff);
 
         page_number = virtual_address >> OFFSET_BITS;
+        // page_number = GET_PAGE_NUMBER(virtual_address);
         offset = virtual_address & OFFSET_MASK;
 
-        // check whether page in main memory
-        if (page_in_memo[page_number] == 1)
-        {
-            // page in main memory
-            frame_number = page_table[page_number];
-        }
-        else
-        {
-            // page not in main memory --> page fault
-            page_faults += 1;
-
+        // search in page table
+        if (page_table[page_number] == -1){
             page_table[page_number] = select_frame();
-
-            // fseek(storage, page_number * PAGE_SIZE, SEEK_SET);
-            // fread(main_memory + page_table[page_number] * PAGE_SIZE, sizeof(int8_t), PAGE_SIZE, storage);
-
-            page_in_memo[page_number] = 1;
-
-            frame_number = page_table[page_number];
+            // page_fault_handler(page_number);
         }
+        frame_number = page_table[page_number];
+        
 
         // calculate physical address
         physical_address = (frame_number << OFFSET_BITS) | offset;
 
         // output result
-        // printf("Virtual address: %d Physical address = %d Value=0 \n", virtual_address, physical_address);
-        printf("Virtual address: %d Physical address = %d Value=0, %d, %d \n", virtual_address, physical_address, page_number, frame_number);
+        printf("Virtual address: %d Physical address = %d Value=%d, %d \n", virtual_address, physical_address, page_number, frame_number);
     }
-
-    // close the file
+    //close all file and unmap file
+    close(mmapfile_fd);
+    munmap(mmapfptr, MEMORY_SIZE);
     fclose(fptr);
-    fclose(storage);
 
-    printf("page table = {");
-    for (int i = 0; i < PAGE_NUM; i++)
-    {
-        printf(" %d ", page_table[i]);
-    }
-    printf("}\n");
-
-    printf("Page_faults = %d ", page_faults);
+    // printf("page table = {");
+    // for (int i = 0; i < PAGES; i++)
+    // {
+    //     printf("%d, ", page_table[i]);
+    // }
+    // printf("}\n");
+    printf("total addresses = %d \n", address_counter);
+    printf("Page_faults = %d \n", page_fault_counter);
 
     return 0;
 }
