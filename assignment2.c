@@ -28,7 +28,7 @@ int page_table[PAGES];
 //backing store pointer
 char *mmapfptr ;
 //native byte representation of memory
-unsigned char *memory[MEMORY_SIZE];
+char memory[MEMORY_SIZE];
 
 int select_frame(){
     ++ page_fault_counter;
@@ -54,7 +54,7 @@ int select_frame(){
 
 void page_fault_handler(int pg_number){
     int frame = page_table[pg_number];
-    memcpy(memory + frame * PAGE_SIZE, mmapfptr + pg_number * PAGE_SIZE, PAGE_SIZE * sizeof(unsigned char));
+    memcpy(memory + frame * PAGE_SIZE, mmapfptr + pg_number * PAGE_SIZE, PAGE_SIZE);
 }
 
 int main(int argc, const char *argv[])
@@ -64,7 +64,7 @@ int main(int argc, const char *argv[])
     //open backing store
     int mmapfile_fd = open("BACKING_STORE.bin", O_RDONLY);
     //backing pointer
-    mmapfptr = mmap(0, MEMORY_SIZE, PROT_READ, MAP_PRIVATE, mmapfile_fd, 0);
+    mmapfptr = mmap(0, PAGES * PAGE_SIZE, PROT_READ, MAP_PRIVATE, mmapfile_fd, 0);
 
     // create buffer to load each virtual address
     char buff[BUFFER_SIZE];
@@ -74,18 +74,19 @@ int main(int argc, const char *argv[])
     {
         page_table[i] = -1;
     }
-
+    // init variables
+    int value;
+    int virtual_address;
+    int page_number;
+    int offset;
+    int physical_address;
+    int frame_number;
     // initialize TLB
 
     while (fgets(buff, BUFFER_SIZE, fptr) != NULL)
     {
         ++ address_counter;
-        int virtual_address;
-        int page_number;
-        int offset;
-        int physical_address;
-        int frame_number;
-
+        
         // calculate virtual address, page number and offset
         virtual_address = atoi(buff);
 
@@ -96,16 +97,18 @@ int main(int argc, const char *argv[])
         // search in page table
         if (page_table[page_number] == -1){
             page_table[page_number] = select_frame();
-            // page_fault_handler(page_number);
+            page_fault_handler(page_number);
         }
         frame_number = page_table[page_number];
         
 
         // calculate physical address
         physical_address = (frame_number << OFFSET_BITS) | offset;
-
+        //get value
+        
+        value = memory[physical_address];
         // output result
-        printf("Virtual address: %d Physical address = %d Value=%d, %d \n", virtual_address, physical_address, page_number, frame_number);
+        printf("Virtual address: %d Physical address = %d Value=%d \n", virtual_address, physical_address, value);
     }
     //close all file and unmap file
     close(mmapfile_fd);
