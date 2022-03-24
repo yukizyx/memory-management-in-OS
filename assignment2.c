@@ -8,8 +8,31 @@
 #define PAGES 256 // logical memory space / page size
 #define OFFSET_BITS 8
 #define PAGE_SIZE 256
-#define BUFFER_SIZE 10 // ??
+#define FRAMES 128 // physical memory space / page size
+#define BUFFER_SIZE 10 // Max number read
 #define TLB_SIZE 16
+
+int frame_counter = -1;
+// initialize page table
+int page_table[PAGES];
+
+int select_frame(){
+    ++ frame_counter;
+    if(frame_counter <= FRAMES){
+        return frame_counter;
+    }else{
+        //find the original page the linked to the frame
+        int frame_index = frame_counter % FRAMES;
+        for (int i = 0; i < PAGES; i++){
+            if (page_table[i] == frame_index){
+                page_table[i] == -1;//invalidate it
+                break;
+            }
+            
+        }
+        return frame_index;
+    }
+}
 
 int main(int argc, const char *argv[])
 {
@@ -30,8 +53,7 @@ int main(int argc, const char *argv[])
 
     int page_faults;
 
-    // initialize page table
-    int page_table[PAGES];
+
     for (i = 0; i < PAGES; i++)
     {
         page_table[i] = -1;
@@ -49,26 +71,33 @@ int main(int argc, const char *argv[])
 
         // search in page table
         int flag = 0;
-        for (i = 0; i < PAGES; i++)
-        {
-            if (page_table[i] == page_number)
-            {
-                frame_number = i;
-                page_faults += 1;
-                break;
-            }
-            if (page_table[i] == -1)
-            {
-                flag = 1;
-                break;
-            }
+        if (page_table[page_number] == -1){
+            frame_number = select_frame();
+            page_table[page_number] = frame_number;
+        }else{
+            frame_number = page_table[page_number];
         }
+        
+        // for (i = 0; i < PAGES; i++)
+        // {
+        //     if (page_table[i] == page_number)
+        //     {
+        //         frame_number = i;
+        //         page_faults += 1;
+        //         break;
+        //     }
+        //     if (page_table[i] == -1)
+        //     {
+        //         flag = 1;
+        //         break;
+        //     }
+        // }
 
-        if (flag == 1)
-        {
-            page_table[i] = page_number;
-            frame_number = i;
-        }
+        // if (flag == 1)
+        // {
+        //     page_table[i] = page_number;
+        //     frame_number = i;
+        // }
 
         // calculate physical address
         physical_address = (frame_number << OFFSET_BITS) | offset;
