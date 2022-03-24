@@ -18,7 +18,7 @@ int page_table[PAGES];
 
 int select_frame(){
     ++ frame_counter;
-    if(frame_counter <= FRAMES){
+    if(frame_counter < FRAMES){
         return frame_counter;
     }else{
         //find the original page the linked to the frame
