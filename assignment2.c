@@ -45,6 +45,7 @@ int search_tlb(int pg_number){
     for (int i = 0; i < TLB_SIZE; i++) {
         if (TLB[i].page == pg_number){
             ++ tlb_hit_counter;
+            // printf("TLB:%d\n", TLB[i].frame);
             return TLB[i].frame;
         }
     }
@@ -61,9 +62,12 @@ void add_tlb(int pg_number, int frame_number){
 void update_tlb(int pg_number, int frame_number){
     for (int i = 0; i < TLB_SIZE; i++){
         //search for the TLB with pg_number
-        if (TLB[i].page == pg_number){
-            TLB[i].frame = frame_number;
+        if (TLB[i].frame == frame_number){
+            TLB[i].page = pg_number;
         }
+        // if (TLB[i].page == pg_number){
+        //     TLB[i].frame = frame_number;
+        // }
     }
 }
 
@@ -81,7 +85,7 @@ int select_frame(){
         // printf("frame index: %d ", frame_index);
         for (int i = 0; i < PAGES; i++){
             if (page_table[i] == frame_index){
-                update_tlb(i, -1);
+                // update_tlb(i, -1);
                 page_table[i] = -1;//invalidate it
                 break;
             }
@@ -93,6 +97,7 @@ int select_frame(){
 
 void page_fault_handler(int pg_number){
     int frame = page_table[pg_number];
+    update_tlb(pg_number, frame);
     //copy memory from mmap file to memory array.
     memcpy(memory + frame * PAGE_SIZE, mmapfptr + pg_number * PAGE_SIZE, PAGE_SIZE);
 }
@@ -140,12 +145,7 @@ int main(int argc, const char *argv[])
         offset = virtual_address & OFFSET_MASK;
         //search in tlb
         tlb_result = search_tlb(page_number);
-        if (tlb_result == -1){//tlb hit but page fault
-            page_table[page_number] = select_frame();
-            page_fault_handler(page_number);
-            frame_number = page_table[page_number];
-            add_tlb(page_number, frame_number);
-        } else if (tlb_result == -2){// tlb not hit
+        if (tlb_result == -2){// tlb not hit
             if (page_table[page_number] == -1){//page fault
                 page_table[page_number] = select_frame();
                 page_fault_handler(page_number);
