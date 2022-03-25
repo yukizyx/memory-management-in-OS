@@ -164,14 +164,15 @@ int main(int argc, const char *argv[])
 
         // search in tlb
         tlb_result = search_TLB(page_number);
-        if (tlb_result == -1)
-        { // tlb hit but page fault
-            page_table[page_number] = select_frame();
-            page_fault_handler(page_number);
-            frame_number = page_table[page_number];
-            TLB_Add(page_number, frame_number);
-        }
-        else if (tlb_result == -2)
+        // if (tlb_result == -1)
+        // { // tlb hit but page fault
+        //     page_table[page_number] = select_frame();
+        //     page_fault_handler(page_number);
+        //     frame_number = page_table[page_number];
+        //     TLB_Add(page_number, frame_number);
+        // }
+        // else if (tlb_result == -2)
+        if (tlb_result == -2)
         { // tlb not hit
             if (page_table[page_number] == -1)
             { // page fault
