@@ -79,9 +79,6 @@ void TLB_Update(int pg_number, int frame_number)
 		{
             TLB[i].page = pg_number;
         }
-        // if (TLB[i].page == pg_number){
-        //     TLB[i].frame = frame_number;
-        // }
     }
 }
 
@@ -90,7 +87,6 @@ int select_frame()
 {
     ++page_fault_counter;
     ++frame_counter;
-    // printf("frame count: %d ", frame_counter);
     if (frame_counter < FRAMES)
     {
         return frame_counter;
@@ -99,17 +95,14 @@ int select_frame()
     {
         // find the original page the linked to the frame
         int frame_index = frame_counter % FRAMES;
-        // printf("frame index: %d ", frame_index);
         for (int i = 0; i < PAGES; i++)
 		{
             if (page_table[i] == frame_index)
 			{
-                // update_tlb(i, -1);
                 page_table[i] = -1;//invalidate it
                 break;
             }
         }
-        // printf("\n");
         return frame_index;
     }
 }
@@ -199,12 +192,6 @@ int main(int argc, const char *argv[])
     munmap(mmapfptr, PAGES * PAGE_SIZE);
     fclose(fptr);
 
-    // printf("page table = {");
-    // for (int i = 0; i < PAGES; i++)
-    // {
-    //     printf("%d, ", page_table[i]);
-    // }
-    // printf("}\n");
     printf("Total addresses = %d \n", address_counter);
     printf("Page_faults = %d \n", page_fault_counter);
     printf("TLB Hits = %d \n", tlb_hit_counter);
